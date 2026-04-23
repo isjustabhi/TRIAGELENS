@@ -1,13 +1,727 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TriageLens — AI Emergency Triage</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏥</text></svg>" />
-  </head>
-  <body style="margin:0;background:#0F1117">
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TriageLens — AI-Powered Emergency Triage Co-Pilot</title>
+  <meta name="description" content="An explainable AI triage co-pilot that predicts ESI acuity levels with chain-of-thought clinical reasoning, real-time streaming explanations, and interactive factor analysis." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary: #0F1117;
+      --bg-card: #1A1D27;
+      --bg-card-hover: #22263A;
+      --border: #2D3348;
+      --text-primary: #E5E7EB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --esi-1: #EF4444;
+      --esi-2: #F97316;
+      --esi-3: #EAB308;
+      --esi-4: #22C55E;
+      --esi-5: #3B82F6;
+      --accent: #818CF8;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      backdrop-filter: blur(20px);
+      background: rgba(15, 17, 23, 0.85);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .nav-logo {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.5rem;
+      color: var(--text-primary);
+      text-decoration: none;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .nav-logo .dna { font-size: 1.3rem; }
+    .nav-links { display: flex; gap: 2rem; list-style: none; }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text-primary); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      position: relative;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -20%; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.08) 0%, rgba(59, 130, 246, 0.05) 40%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(129, 140, 248, 0.1);
+      border: 1px solid rgba(129, 140, 248, 0.25);
+      border-radius: 100px;
+      padding: 0.4rem 1.2rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      animation: fadeDown 0.8s ease-out;
+    }
+    .hero-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--esi-4);
+      animation: pulse-dot 2s infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.5); }
+    }
+
+    .hero h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(3rem, 7vw, 5.5rem);
+      font-weight: 400;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      animation: fadeDown 0.8s ease-out 0.1s both;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--esi-1) 0%, var(--esi-2) 25%, var(--esi-3) 50%, var(--esi-4) 75%, var(--esi-5) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: clamp(1rem, 2vw, 1.25rem);
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin-bottom: 2.5rem;
+      animation: fadeDown 0.8s ease-out 0.2s both;
+    }
+    .hero-actions {
+      display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;
+      animation: fadeDown 0.8s ease-out 0.3s both;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.85rem 2rem;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--esi-1), var(--esi-2));
+      color: #fff;
+      box-shadow: 0 4px 24px rgba(239, 68, 68, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(239, 68, 68, 0.45);
+    }
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--text-muted);
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── ESI STRIP ── */
+    .esi-strip {
+      display: flex; justify-content: center; gap: 0.75rem;
+      margin-top: 3.5rem;
+      animation: fadeDown 0.8s ease-out 0.4s both;
+    }
+    .esi-chip {
+      display: flex; align-items: center; gap: 0.4rem;
+      padding: 0.35rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .esi-chip .num {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .esi-chip.e1 { background: rgba(239,68,68,0.12); color: var(--esi-1); }
+    .esi-chip.e1 .num { background: var(--esi-1); }
+    .esi-chip.e2 { background: rgba(249,115,22,0.12); color: var(--esi-2); }
+    .esi-chip.e2 .num { background: var(--esi-2); }
+    .esi-chip.e3 { background: rgba(234,179,8,0.12); color: var(--esi-3); }
+    .esi-chip.e3 .num { background: var(--esi-3); }
+    .esi-chip.e4 { background: rgba(34,197,94,0.12); color: var(--esi-4); }
+    .esi-chip.e4 .num { background: var(--esi-4); }
+    .esi-chip.e5 { background: rgba(59,130,246,0.12); color: var(--esi-5); }
+    .esi-chip.e5 .num { background: var(--esi-5); }
+
+    /* ── SECTIONS ── */
+    section { padding: 6rem 2rem; max-width: 1100px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+    }
+    .section-title {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 400;
+      margin-bottom: 1rem;
+    }
+    .section-desc {
+      color: var(--text-secondary);
+      max-width: 650px;
+      font-size: 1.05rem;
+      margin-bottom: 3rem;
+    }
+
+    /* ── PROBLEM ── */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    .problem-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      transition: all 0.3s;
+    }
+    .problem-card:hover {
+      border-color: var(--text-muted);
+      transform: translateY(-4px);
+    }
+    .problem-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 1.25rem;
+    }
+    .problem-card h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .problem-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+    .stat-big {
+      font-family: 'Instrument Serif', serif;
+      font-size: 2.5rem;
+      font-weight: 400;
+      margin-bottom: 0.25rem;
+    }
+
+    /* ── FEATURES ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
+    }
+    .feature-card:hover {
+      border-color: var(--text-muted);
+      transform: translateY(-3px);
+    }
+    .feature-card.highlight {
+      border-color: rgba(239, 68, 68, 0.3);
+      background: linear-gradient(135deg, rgba(239,68,68,0.05), rgba(249,115,22,0.03));
+    }
+    .feature-card.highlight::before {
+      content: 'WOW FACTOR';
+      position: absolute;
+      top: 1rem; right: 1rem;
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: var(--esi-1);
+      background: rgba(239,68,68,0.12);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+    }
+    .feature-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+    }
+    .feature-card h3 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .feature-card p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    /* ── REASONING DEMO ── */
+    .reasoning-section {
+      padding: 5rem 2rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .reasoning-demo {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-top: 2rem;
+    }
+    .reasoning-header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .reasoning-header .dots {
+      display: flex; gap: 6px;
+    }
+    .reasoning-header .dots span {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .reasoning-header .dots span:nth-child(1) { background: var(--esi-1); }
+    .reasoning-header .dots span:nth-child(2) { background: var(--esi-3); }
+    .reasoning-header .dots span:nth-child(3) { background: var(--esi-4); }
+    .reasoning-header .title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .reasoning-body {
+      padding: 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 1.9;
+      color: var(--text-secondary);
+      min-height: 200px;
+    }
+    .reasoning-body .step {
+      opacity: 0;
+      animation: stepIn 0.5s ease-out forwards;
+    }
+    .reasoning-body .step:nth-child(1) { animation-delay: 0.5s; }
+    .reasoning-body .step:nth-child(2) { animation-delay: 1.8s; }
+    .reasoning-body .step:nth-child(3) { animation-delay: 3.1s; }
+    .reasoning-body .step:nth-child(4) { animation-delay: 4.4s; }
+    .reasoning-body .step:nth-child(5) { animation-delay: 5.7s; }
+    .reasoning-body .arrow { color: var(--esi-2); margin-right: 0.5rem; }
+    .reasoning-body .esi-result {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(239,68,68,0.15);
+      color: var(--esi-1);
+      padding: 0.3rem 0.8rem;
+      border-radius: 6px;
+      font-weight: 600;
+      margin-top: 0.5rem;
+    }
+    @keyframes stepIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ── TECH STACK ── */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .tech-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .tech-card:hover { border-color: var(--text-muted); }
+    .tech-card .layer {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .tech-card .name {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    .tech-card .desc {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 0.3rem;
+    }
+
+    /* ── FLOW ── */
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+    }
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 1.5rem;
+      padding: 1.5rem 0;
+      position: relative;
+    }
+    .flow-step::before {
+      content: '';
+      position: absolute;
+      left: 19px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .flow-step:first-child::before { top: 50%; }
+    .flow-step:last-child::before { bottom: 50%; }
+    .flow-num {
+      width: 40px; height: 40px;
+      min-width: 40px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      position: relative;
+      z-index: 1;
+    }
+    .flow-content h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .flow-content p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    /* ── DISCLAIMER ── */
+    .disclaimer {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+    .disclaimer-box {
+      background: rgba(234, 179, 8, 0.05);
+      border: 1px solid rgba(234, 179, 8, 0.2);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .disclaimer-box .icon { font-size: 1.3rem; margin-top: 0.1rem; }
+    .disclaimer-box p {
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+    .disclaimer-box strong { color: var(--esi-3); }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 2rem;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    footer .name {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      nav { padding: 0.8rem 1rem; }
+      .nav-links { display: none; }
+      .esi-strip { flex-wrap: wrap; }
+      .esi-chip span.label { display: none; }
+      section { padding: 4rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <a href="#" class="nav-logo">
+      <span class="dna">🧬</span> TriageLens
+    </a>
+    <ul class="nav-links">
+      <li><a href="#problem">Problem</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="#reasoning">AI Reasoning</a></li>
+      <li><a href="#tech">Tech Stack</a></li>
+      <li><a href="#flow">How It Works</a></li>
+    </ul>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Codex Creator Challenge
+    </div>
+    <h1>
+      Emergency Triage,<br />
+      <span class="gradient">Explained by AI.</span>
+    </h1>
+    <p class="hero-sub">
+      An AI co-pilot that predicts patient acuity using the ESI framework — with transparent, step-by-step clinical reasoning a nurse can audit in seconds.
+    </p>
+    <div class="hero-actions">
+      <a href="#features" class="btn btn-primary">Explore Features ↓</a>
+      <a href="#reasoning" class="btn btn-secondary">See AI Reasoning</a>
+    </div>
+    <div class="esi-strip">
+      <div class="esi-chip e1"><span class="num">1</span> <span class="label">Resuscitation</span></div>
+      <div class="esi-chip e2"><span class="num">2</span> <span class="label">Emergent</span></div>
+      <div class="esi-chip e3"><span class="num">3</span> <span class="label">Urgent</span></div>
+      <div class="esi-chip e4"><span class="num">4</span> <span class="label">Less Urgent</span></div>
+      <div class="esi-chip e5"><span class="num">5</span> <span class="label">Non-Urgent</span></div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section id="problem">
+    <div class="section-label">The Problem</div>
+    <h2 class="section-title">ER Triage is Broken</h2>
+    <p class="section-desc">Emergency departments face a critical decision-making gap that costs lives and wastes resources every single day.</p>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon" style="background: rgba(239,68,68,0.12); color: var(--esi-1);">⚠️</div>
+        <div class="stat-big" style="color: var(--esi-1);">~30%</div>
+        <h3>Misclassification Rate</h3>
+        <p>Studies show nearly 1 in 3 ER patients are assigned the wrong triage severity level.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon" style="background: rgba(249,115,22,0.12); color: var(--esi-2);">⏱️</div>
+        <div class="stat-big" style="color: var(--esi-2);">2–4 min</div>
+        <h3>Decision Window</h3>
+        <p>Nurses have minutes to assess acuity. Cognitive overload during surges leads to errors.</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon" style="background: rgba(59,130,246,0.12); color: var(--esi-5);">🏥</div>
+        <div class="stat-big" style="color: var(--esi-5);">145M+</div>
+        <h3>Annual ER Visits (US)</h3>
+        <p>With volumes this high, even small accuracy gains save thousands of lives per year.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="section-label">Core Features</div>
+    <h2 class="section-title">Built for Clinical Impact</h2>
+    <p class="section-desc">Every feature is purpose-built to support — never replace — the clinical judgment of emergency professionals.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-num">01</div>
+        <h3>Structured Intake</h3>
+        <p>Enter vitals (HR, BP, SpO2, temp, pain) alongside free-text chief complaints for comprehensive patient assessment.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">02</div>
+        <h3>AI Triage Engine</h3>
+        <p>LLM-powered ESI prediction (1–5) using chain-of-thought reasoning grounded in official ESI clinical guidelines.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">03</div>
+        <h3>Factor Analysis</h3>
+        <p>Interactive bar chart showing exactly how each vital and complaint keyword pushed the acuity score up or down.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">04</div>
+        <h3>Live Patient Queue</h3>
+        <p>Kanban-style dashboard with all patients color-coded by ESI level. At-a-glance department situational awareness.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-num">05</div>
+        <h3>Simulation Mode</h3>
+        <p>Auto-generates realistic patient scenarios for training, demos, and evaluation — no real data needed.</p>
+      </div>
+      <div class="feature-card highlight">
+        <div class="feature-num">06</div>
+        <h3>Reasoning Trace</h3>
+        <p>Watch the AI think step-by-step through each clinical case in real-time. Fully transparent, fully auditable.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- REASONING DEMO -->
+  <section class="reasoning-section" id="reasoning">
+    <div class="section-label">The WOW Factor</div>
+    <h2 class="section-title">Watch the AI Think</h2>
+    <p class="section-desc">The reasoning trace streams in real-time — judges and users literally see the AI work through each clinical decision step.</p>
+    <div class="reasoning-demo">
+      <div class="reasoning-header">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <span class="title">clinical_reasoning_trace.log</span>
+      </div>
+      <div class="reasoning-body">
+        <div class="step"><span class="arrow">→</span> <strong>Step 1:</strong> Assessing immediate life threats — Patient presents with chest pain, diaphoresis. HR 112 bpm (tachycardic). SpO2 91% (hypoxic). This combination suggests possible acute coronary syndrome.</div>
+        <div class="step"><span class="arrow">→</span> <strong>Step 2:</strong> Evaluating high-risk indicators — Age 72 with acute onset, radiating pain to left arm. BP 158/94 (hypertensive). These are classic ACS red flags requiring immediate evaluation.</div>
+        <div class="step"><span class="arrow">→</span> <strong>Step 3:</strong> Resource estimation — Will require: ECG, troponin labs, chest X-ray, IV access, continuous monitoring, likely cardiology consult. Resource count: 6+ → exceeds ESI-3 threshold.</div>
+        <div class="step"><span class="arrow">→</span> <strong>Step 4:</strong> Final determination — High-risk presentation with vital sign abnormalities and multiple resource needs. Patient meets criteria for ESI Level 2.</div>
+        <div class="step"><span class="esi-result">■ ESI LEVEL 2 — EMERGENT &nbsp;|&nbsp; Confidence: 94%</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH STACK -->
+  <section id="tech">
+    <div class="section-label">Architecture</div>
+    <h2 class="section-title">Tech Stack</h2>
+    <p class="section-desc">Lean, modern, and fully client-side. No backend required.</p>
+    <div class="tech-grid">
+      <div class="tech-card">
+        <div class="layer">Frontend</div>
+        <div class="name">React + Tailwind</div>
+        <div class="desc">Single-page app with utility-first styling</div>
+      </div>
+      <div class="tech-card">
+        <div class="layer">AI Engine</div>
+        <div class="name">Claude API</div>
+        <div class="desc">Sonnet model with structured clinical prompts</div>
+      </div>
+      <div class="tech-card">
+        <div class="layer">Visualization</div>
+        <div class="name">Recharts</div>
+        <div class="desc">Factor contribution bar charts</div>
+      </div>
+      <div class="tech-card">
+        <div class="layer">Deployment</div>
+        <div class="name">Static SPA</div>
+        <div class="desc">Zero infrastructure, runs anywhere</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <section id="flow">
+    <div class="section-label">Data Flow</div>
+    <h2 class="section-title">How It Works</h2>
+    <p class="section-desc">From intake to insight in under 5 seconds.</p>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-num">1</div>
+        <div class="flow-content">
+          <h4>Patient Data Entry</h4>
+          <p>Nurse enters vitals and chief complaint via structured intake form.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">2</div>
+        <div class="flow-content">
+          <h4>Clinical Prompt Construction</h4>
+          <p>App builds a structured prompt embedding ESI guidelines and patient data.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">3</div>
+        <div class="flow-content">
+          <h4>AI Analysis</h4>
+          <p>Claude processes the case through 4-step chain-of-thought clinical reasoning.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">4</div>
+        <div class="flow-content">
+          <h4>Results Rendered</h4>
+          <p>ESI level, confidence score, reasoning trace, and factor analysis displayed.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-num">5</div>
+        <div class="flow-content">
+          <h4>Queue Updated</h4>
+          <p>Patient card added to the Kanban board, sorted by acuity for department-wide visibility.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer">
+    <div class="disclaimer-box">
+      <span class="icon">⚕️</span>
+      <p><strong>Medical Disclaimer:</strong> TriageLens is a demonstration and educational tool built for the Codex Creator Challenge. It is not FDA-approved, not clinically validated, and should never be used as a substitute for professional medical judgment. All simulated patient scenarios are AI-generated and fictional.</p>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="name">Built by a Data Science MS Candidate — University of Arizona</div>
+    <p>Codex Creator Challenge 2026 &nbsp;·&nbsp; Powered by Anthropic Claude</p>
+  </footer>
+
+</body>
 </html>
