@@ -87,7 +87,7 @@ TriageLens is a **demonstration and educational tool**. It is not FDA-approved, 
 **Abhiram Varma Nandimandalam** — M.S. Data Science, University of Arizona
 Experience in AI, healthcare analytics, and clinical simulation systems.
 
-Built for the **Codex Creator Challenge** by Anthropic.
+Built for the **Codex Creator Challenge** by Handshake.
 
 ---
 
