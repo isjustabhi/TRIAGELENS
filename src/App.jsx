@@ -25,7 +25,7 @@ ESI Levels:
 4 - Less Urgent: One resource needed
 5 - Non-Urgent: No resources needed
 
-Given patient data, respond ONLY with this JSON (no markdown, no backticks):
+Given patient data, respond ONLY with valid JSON (no markdown, no backticks, use \\n for newlines inside strings):
 {
   "esi_level": <1-5>,
   "confidence": <0.0-1.0>,
@@ -46,7 +46,7 @@ Given patient data, respond ONLY with this JSON (no markdown, no backticks):
 }
 Positive impact = increases acuity (worse). Negative impact = decreases acuity (better).`;
 
-const SIMULATION_PROMPT = `Generate a realistic emergency department patient. Respond ONLY with JSON (no markdown):
+const SIMULATION_PROMPT = `Generate a realistic emergency department patient. Respond ONLY with valid JSON (no markdown, no backticks):
 {
   "name": "<realistic full name>",
   "age": <18-95>,
@@ -65,11 +65,59 @@ Vary severity. Include a mix of ESI 1-5 cases. Make complaints clinically realis
 
 const INITIAL_FORM = { name: "", age: "", sex: "Male", chiefComplaint: "", hr: "", sbp: "", dbp: "", spo2: "", temp: "", painScale: 5 };
 
-const parseClaudeJson = (text) => {
+const PROGRESS_STEPS = [
+  { pct: 5, msg: "Initializing AI engine..." },
+  { pct: 12, msg: "Connecting to GPT-4o..." },
+  { pct: 20, msg: "Sending patient data..." },
+  { pct: 30, msg: "Analyzing vital signs..." },
+  { pct: 42, msg: "Evaluating chief complaint..." },
+  { pct: 55, msg: "Assessing life threats..." },
+  { pct: 65, msg: "Calculating resource needs..." },
+  { pct: 75, msg: "Running ESI classification..." },
+  { pct: 85, msg: "Generating clinical reasoning..." },
+  { pct: 92, msg: "Building factor analysis..." },
+  { pct: 97, msg: "Finalizing triage report..." },
+];
+
+const SIM_PROGRESS_STEPS = [
+  { pct: 5, msg: "Initializing simulation..." },
+  { pct: 15, msg: "Generating patient profile..." },
+  { pct: 30, msg: "Creating realistic vitals..." },
+  { pct: 45, msg: "Writing chief complaint..." },
+  { pct: 55, msg: "Patient generated — starting triage..." },
+  { pct: 65, msg: "Analyzing vital signs..." },
+  { pct: 75, msg: "Running ESI classification..." },
+  { pct: 85, msg: "Generating clinical reasoning..." },
+  { pct: 95, msg: "Adding to queue..." },
+];
+
+const safeJsonParse = (text) => {
   const t = text.trim();
   const s = t.indexOf("{"), e = t.lastIndexOf("}");
   if (s === -1 || e === -1 || e < s) throw new Error("Non-JSON response from AI.");
-  return JSON.parse(t.slice(s, e + 1));
+  let raw = t.slice(s, e + 1);
+  // Fix unescaped control characters inside JSON string values
+  raw = raw.replace(/"(?:[^"\\]|\\.)*"/g, (match) => {
+    return match
+      .replace(/(?<!\\)\n/g, "\\n")
+      .replace(/(?<!\\)\r/g, "\\r")
+      .replace(/(?<!\\)\t/g, "\\t");
+  });
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    // Try stripping markdown fences
+    const cleaned = t.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/, "").trim();
+    const s2 = cleaned.indexOf("{"), e2 = cleaned.lastIndexOf("}");
+    if (s2 !== -1 && e2 !== -1 && e2 > s2) {
+      let raw2 = cleaned.slice(s2, e2 + 1);
+      raw2 = raw2.replace(/"(?:[^"\\]|\\.)*"/g, (match) => {
+        return match.replace(/(?<!\\)\n/g, "\\n").replace(/(?<!\\)\r/g, "\\r").replace(/(?<!\\)\t/g, "\\t");
+      });
+      return JSON.parse(raw2);
+    }
+    throw new Error("Could not parse AI response. Please try again.");
+  }
 };
 
 const buildUserMessage = (p) =>
@@ -95,9 +143,25 @@ const Field = ({ label, children }) => (
 
 const inp = { width: "100%", boxSizing: "border-box", borderRadius: 16, border: "1px solid #2D3348", backgroundColor: "#11141D", padding: "12px 16px", color: "#E5E7EB", outline: "none", fontSize: 14, fontFamily: "inherit" };
 
-const Spin = ({ label = "Loading" }) => (
-  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 14, color: "#9CA3AF" }}>
-    <Loader2 size={20} className="anim-spin" /> <span>{label}</span>
+const ProgressBar = ({ percent, message }) => (
+  <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <Loader2 size={16} className="anim-spin" style={{ color: "#F97316" }} />
+        <span style={{ fontSize: 14, color: "#D1D5DB" }}>{message}</span>
+      </div>
+      <span style={{ fontSize: 14, fontWeight: 600, color: "#F97316", fontFamily: "monospace" }}>{percent}%</span>
+    </div>
+    <div style={{ width: "100%", height: 6, borderRadius: 999, backgroundColor: "#1A1D27", overflow: "hidden" }}>
+      <div style={{
+        height: "100%",
+        borderRadius: 999,
+        background: "linear-gradient(90deg, #EF4444, #F97316, #EAB308)",
+        width: `${percent}%`,
+        transition: "width 0.4s ease-out",
+        boxShadow: "0 0 12px rgba(249, 115, 22, 0.4)",
+      }} />
+    </div>
   </div>
 );
 
@@ -134,7 +198,11 @@ export default function App() {
   const [draft, setDraft] = useState(null);
   const [reasoning, setReasoning] = useState("");
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState({ percent: 0, message: "" });
   const twRef = useRef(null);
+  const progressRef = useRef(null);
+
+  const apiKey = import.meta.env.VITE_OPENAI_API_KEY || "";
 
   const grouped = useMemo(() => [1, 2, 3, 4, 5].map((l) => ({ level: l, patients: patients.filter((p) => p.esiResult?.level === l) })), [patients]);
 
@@ -149,17 +217,52 @@ export default function App() {
     return () => clearTimeout(twRef.current);
   }, [view, draft]);
 
-  const callClaude = async (system, userPrompt) => {
-    const res = await fetch("/api/claude", {
+  const startProgress = (steps) => {
+    let idx = 0;
+    setProgress({ percent: steps[0].pct, message: steps[0].msg });
+    progressRef.current = setInterval(() => {
+      idx++;
+      if (idx < steps.length) {
+        setProgress({ percent: steps[idx].pct, message: steps[idx].msg });
+      } else {
+        clearInterval(progressRef.current);
+      }
+    }, 1200);
+  };
+
+  const stopProgress = () => {
+    if (progressRef.current) clearInterval(progressRef.current);
+    setProgress({ percent: 100, message: "Complete!" });
+    setTimeout(() => setProgress({ percent: 0, message: "" }), 600);
+  };
+
+  const callOpenAI = async (system, userPrompt) => {
+    if (!apiKey) throw new Error("OpenAI API key not found. Set VITE_OPENAI_API_KEY in Vercel environment variables.");
+
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ system, messages: [{ role: "user", content: userPrompt }] }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: userPrompt },
+        ],
+      }),
     });
-    if (!res.ok) { const d = await res.text(); throw new Error(`API error (${res.status}): ${d}`); }
+
+    if (!res.ok) {
+      const d = await res.text();
+      throw new Error(`API error (${res.status}): ${d}`);
+    }
+
     const data = await res.json();
-    const text = data?.content?.find((c) => c.type === "text")?.text;
+    const text = data?.choices?.[0]?.message?.content;
     if (!text) throw new Error("No text in AI response.");
-    return parseClaudeJson(text);
+    return safeJsonParse(text);
   };
 
   const reset = () => { setForm(INITIAL_FORM); setDraft(null); setReasoning(""); setError(""); setSimMode(false); };
@@ -179,12 +282,14 @@ export default function App() {
 
   const runTriage = async (patient, { autoQueue = false } = {}) => {
     setError(""); setView("intake"); setAnalyzing(true);
+    startProgress(PROGRESS_STEPS);
     try {
-      const t = await callClaude(TRIAGE_SYSTEM_PROMPT, buildUserMessage(patient));
+      const t = await callOpenAI(TRIAGE_SYSTEM_PROMPT, buildUserMessage(patient));
+      stopProgress();
       const tp = { ...patient, esiResult: { level: clamp(Number(t.esi_level) || 3, 1, 5), confidence: clamp(Number(t.confidence) || 0, 0, 1), reasoning: Array.isArray(t.reasoning) ? t.reasoning : [], factors: normalizeFactors(t.factors) } };
       if (autoQueue) { setPatients((p) => [tp, ...p]); setSelected(tp); setView("dashboard"); reset(); return; }
       setDraft(tp); setView("result");
-    } catch (err) { setError(err.message); setView("intake"); }
+    } catch (err) { stopProgress(); setError(err.message); setView("intake"); }
     finally { setAnalyzing(false); }
   };
 
@@ -195,12 +300,13 @@ export default function App() {
 
   const handleSimulate = async () => {
     setSimMode(true); setError(""); setView("dashboard");
+    startProgress(SIM_PROGRESS_STEPS);
     try {
-      const sim = await callClaude("You generate realistic emergency department patients.", SIMULATION_PROMPT);
+      const sim = await callOpenAI("You generate realistic emergency department patients.", SIMULATION_PROMPT);
       const p = { id: crypto.randomUUID(), name: sim.name || "Simulated Patient", age: Number(sim.age) || 40, sex: sim.sex || "Male", chiefComplaint: sim.chiefComplaint || "Undifferentiated complaint.", vitals: { hr: Number(sim?.vitals?.hr) || 88, sbp: Number(sim?.vitals?.sbp) || 122, dbp: Number(sim?.vitals?.dbp) || 78, spo2: Number(sim?.vitals?.spo2) || 98, temp: Number(sim?.vitals?.temp) || 98.6, painScale: Number(sim?.vitals?.painScale) || 4 }, esiResult: null, timestamp: new Date().toISOString() };
       setForm({ name: p.name, age: p.age, sex: p.sex, chiefComplaint: p.chiefComplaint, hr: p.vitals.hr, sbp: p.vitals.sbp, dbp: p.vitals.dbp, spo2: p.vitals.spo2, temp: p.vitals.temp, painScale: p.vitals.painScale });
       await runTriage(p, { autoQueue: true });
-    } catch (err) { setError(err.message); } finally { setSimMode(false); }
+    } catch (err) { setError(err.message); } finally { stopProgress(); setSimMode(false); }
   };
 
   const addToQueue = () => { if (!draft?.esiResult) return; setPatients((p) => [draft, ...p]); setSelected(draft); setView("dashboard"); reset(); };
@@ -243,7 +349,11 @@ export default function App() {
 
         {error && <div style={{ marginBottom: 20, display: "flex", alignItems: "flex-start", gap: 12, borderRadius: 16, border: "1px solid rgba(239,68,68,.3)", backgroundColor: "rgba(239,68,68,.1)", padding: "12px 16px", fontSize: 14, color: "#FCA5A5" }}><AlertTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} /><span>{error}</span></div>}
 
-        {(simMode || analyzing) && <div style={{ ...card, marginBottom: 20, padding: 16 }}><Spin label={simMode ? "Generating simulated patient and running triage..." : "Running triage analysis..."} /></div>}
+        {(simMode || analyzing) && progress.percent > 0 && (
+          <div style={{ ...card, marginBottom: 20, padding: 20 }}>
+            <ProgressBar percent={progress.percent} message={progress.message} />
+          </div>
+        )}
 
         <main style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, flex: 1 }}>
           {grouped.map((col) => {
@@ -295,6 +405,13 @@ export default function App() {
               </div>
               <button onClick={() => { setView("dashboard"); reset(); }} style={{ ...btn2, padding: 12 }}><X size={20} /></button>
             </div>
+
+            {analyzing && progress.percent > 0 && (
+              <div style={{ marginBottom: 24, borderRadius: 20, border: "1px solid #2D3348", backgroundColor: "#1A1D27", padding: 20 }}>
+                <ProgressBar percent={progress.percent} message={progress.message} />
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
               <div style={{ borderRadius: 28, border: "1px solid #2D3348", backgroundColor: "#1A1D27", padding: 20, display: "flex", flexDirection: "column", gap: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: "#fff" }}><Activity size={16} color="#F97316" /> Vitals</div>
@@ -315,8 +432,8 @@ export default function App() {
                   <Field label="Sex"><select value={form.sex} onChange={(e) => setForm((p) => ({ ...p, sex: e.target.value }))} style={inp}><option>Male</option><option>Female</option><option>Other</option></select></Field>
                 </div>
                 <Field label="Chief Complaint"><textarea rows={6} value={form.chiefComplaint} onChange={(e) => setForm((p) => ({ ...p, chiefComplaint: e.target.value }))} style={{ ...inp, resize: "vertical" }} placeholder="72yo male, chest pain radiating to left arm, diaphoretic, onset 20 minutes ago" /></Field>
-                <button onClick={handleSubmit} disabled={analyzing} style={{ ...btn1, width: "100%", padding: "12px 20px" }}>
-                  {analyzing ? <Loader2 size={16} className="anim-spin" /> : <ClipboardPlus size={16} />} Run Triage Analysis
+                <button onClick={handleSubmit} disabled={analyzing} style={{ ...btn1, width: "100%", padding: "12px 20px", opacity: analyzing ? 0.6 : 1 }}>
+                  {analyzing ? <Loader2 size={16} className="anim-spin" /> : <ClipboardPlus size={16} />} {analyzing ? "Analyzing..." : "Run Triage Analysis"}
                 </button>
               </div>
             </div>
@@ -346,7 +463,7 @@ export default function App() {
               <div style={{ borderRadius: 28, border: "1px solid #2D3348", backgroundColor: "#1A1D27", padding: 20 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#fff" }}>Clinical Reasoning</h3>
-                  {streaming && <Spin label="Streaming" />}
+                  {streaming && <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#9CA3AF" }}><Loader2 size={14} className="anim-spin" /> Streaming</div>}
                 </div>
                 <pre style={{ minHeight: 280, whiteSpace: "pre-wrap", wordBreak: "break-word", borderRadius: 16, border: "1px solid #2D3348", backgroundColor: "#11141D", padding: 16, fontFamily: "monospace", fontSize: 14, lineHeight: 1.8, color: "#D1D5DB", margin: 0 }}>{reasoning}</pre>
               </div>
